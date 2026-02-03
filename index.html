@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>حاسبة تكلفة الهياكل المعدنية</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap');
+:root{
+  --bg:#0f1117;--card:#1a1d27;--card2:#222638;--inp:#141620;
+  --blue:#5b8ff9;--blue-g:rgba(91,143,249,.15);
+  --green:#4caf7d;--green-g:rgba(76,175,125,.12);
+  --amber:#f0a53a;--red:#ef5350;
+  --text:#e2e4ea;--dim:#7e8494;--border:#2e3345;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;direction:rtl}
+
+/* ─── NAV TABS ─── */
+.nav{display:flex;justify-content:center;gap:6px;padding:20px 12px 0;flex-wrap:wrap}
+.nav button{background:var(--card);border:1px solid var(--border);color:var(--dim);padding:9px 18px;border-radius:10px;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit;transition:.2s;white-space:nowrap}
+.nav button:hover{border-color:var(--blue);color:var(--text)}
+.nav button.active{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 0 12px var(--blue-g)}
+
+/* ─── PAGES ─── */
+.page{display:none;max-width:1100px;margin:0 auto;padding:18px 14px 40px}
+.page.show{display:block}
+
+/* ─── HEADER ─── */
+.pg-head{text-align:center;margin-bottom:22px}
+.pg-head h1{font-size:1.4rem;font-weight:700;background:linear-gradient(135deg,var(--blue),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.pg-head p{color:var(--dim);font-size:.78rem;margin-top:4px}
+
+/* ─── CARD ─── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px}
+.ch{display:flex;align-items:center;gap:8px;padding:11px 16px;background:var(--card2);border-bottom:1px solid var(--border)}
+.ch .icon{font-size:1.1rem}.ch h2{font-size:.85rem;font-weight:600}
+.cb{padding:16px}
+
+/* ─── INPUT GRID (dims) ─── */
+.ig{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.ig-item label{display:block;font-size:.75rem;color:var(--dim);margin-bottom:5px;font-weight:500}
+.ig-item .iw{position:relative}
+.ig-item input{width:100%;background:var(--inp);border:1px solid var(--border);border-radius:7px;padding:8px 32px 8px 10px;color:var(--blue);font-size:.92rem;font-weight:700;font-family:inherit;text-align:right;transition:.2s}
+.ig-item input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-g)}
+.ig-item .u{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:.7rem;color:var(--dim);pointer-events:none}
+
+/* ─── AUTO CALC ROW ─── */
+.acr{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.ac-item{background:var(--green-g);border:1px solid rgba(76,175,125,.2);border-radius:9px;padding:10px 12px}
+.ac-item .al{font-size:.7rem;color:var(--green);font-weight:600;margin-bottom:3px}
+.ac-item .av{font-size:.95rem;font-weight:700}
+.ac-item .au{font-size:.66rem;color:var(--dim)}
+
+/* ─── TABLE ─── */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+th{background:var(--card2);color:var(--dim);font-weight:600;padding:9px 8px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;font-size:.73rem}
+td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:right}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+td input,td select{background:var(--inp);border:1px solid transparent;border-radius:5px;padding:5px 7px;color:var(--blue);font-size:.8rem;font-family:inherit;width:100%;text-align:right;font-weight:600;transition:.2s}
+td input:focus,td select:focus{outline:none;border-color:var(--blue)}
+td select{cursor:pointer;appearance:none;-webkit-appearance:none}
+td select option{background:var(--card);color:var(--text)}
+.ro{color:var(--green) !important;font-weight:700;background:transparent !important;border-color:transparent !important;pointer-events:none}
+.rn{color:var(--dim);font-weight:600;font-size:.76rem}
+.nc{color:var(--dim);font-size:.72rem;font-style:italic}
+td input.wide{width:100%}
+
+/* ADD / DEL ─── */
+.btn-add{display:inline-flex;align-items:center;gap:5px;margin-top:10px;background:rgba(91,143,249,.08);border:1px dashed var(--blue);color:var(--blue);font-size:.76rem;padding:5px 13px;border-radius:7px;cursor:pointer;font-family:inherit;transition:.2s}
+.btn-add:hover{background:rgba(91,143,249,.17)}
+.btn-del{background:none;border:none;color:var(--dim);cursor:pointer;font-size:1rem;padding:1px 5px;border-radius:4px;transition:.2s}
+.btn-del:hover{color:var(--red);background:rgba(239,83,80,.1)}
+
+/* ─── SUMMARY CARDS ─── */
+.sc-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.sc{border-radius:11px;padding:16px 14px;text-align:center}
+.sc.m{background:linear-gradient(135deg,rgba(91,143,249,.12),rgba(91,143,249,.04));border:1px solid rgba(91,143,249,.2)}
+.sc.i{background:linear-gradient(135deg,rgba(240,165,58,.12),rgba(240,165,58,.04));border:1px solid rgba(240,165,58,.2)}
+.sc.l{background:linear-gradient(135deg,rgba(76,175,125,.12),rgba(76,175,125,.04));border:1px solid rgba(76,175,125,.2)}
+.sc .sl{font-size:.73rem;color:var(--dim);margin-bottom:5px;font-weight:600}
+.sc .sv{font-size:1.25rem;font-weight:700}
+.sc.m .sv{color:var(--blue)}.sc.i .sv{color:var(--amber)}.sc.l .sv{color:var(--green)}
+
+.total-box{margin-top:14px;background:linear-gradient(135deg,rgba(239,83,80,.08),rgba(240,165,58,.06));border:1px solid rgba(239,83,80,.2);border-radius:11px;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.total-box .tbl{font-size:.84rem;color:var(--dim);font-weight:600}
+.total-box .tbv{font-size:1.5rem;font-weight:700;color:var(--red)}
+.total-box .tbs{font-size:.72rem;color:var(--dim);margin-top:2px}
+
+.profit-row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:11px 14px;background:var(--card2);border-radius:9px;flex-wrap:wrap;gap:10px}
+.profit-row .pri{display:flex;flex-direction:column}
+.profit-row .prl{font-size:.7rem;color:var(--dim)}
+.profit-row .prv{font-size:.95rem;font-weight:700;color:var(--green)}
+.profit-row input{background:var(--inp);border:1px solid var(--border);border-radius:5px;padding:5px 26px 5px 8px;color:var(--blue);font-size:.88rem;font-weight:700;font-family:inherit;width:100px;text-align:right;margin-top:3px}
+.profit-row input:focus{outline:none;border-color:var(--blue)}
+
+/* LEGEND */
+.legend{display:flex;gap:14px;margin-top:12px;flex-wrap:wrap}
+.legend-i{display:flex;align-items:center;gap:5px;font-size:.74rem;color:var(--dim)}
+.ld{width:9px;height:9px;border-radius:3px}.ld.b{background:var(--blue)}.ld.g{background:var(--green)}
+
+/* ─── INSTRUCTIONS PAGE ─── */
+.inst-list{list-style:none;counter-reset:inst}
+.inst-list li{counter-increment:inst;display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border)}
+.inst-list li:last-child{border-bottom:none}
+.inst-list .num{background:var(--blue);color:#fff;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0}
+.inst-list .txt{font-size:.84rem;line-height:1.5;color:var(--text)}
+.inst-list .txt strong{color:var(--blue)}
+.note-box{background:rgba(240,165,58,.07);border:1px solid rgba(240,165,58,.25);border-radius:10px;padding:14px 16px;margin-top:16px}
+.note-box h3{color:var(--amber);font-size:.82rem;margin-bottom:8px}
+.note-box ul{list-style:none;padding:0}
+.note-box ul li{font-size:.79rem;color:var(--text);padding:4px 0;display:flex;gap:8px;align-items:flex-start}
+.note-box ul li .ic{flex-shrink:0}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:640px){.ig,.acr,.sc-row{grid-template-columns:1fr 1fr}}
+@media(max-width:380px){.ig,.acr,.sc-row{grid-template-columns:1fr}}
+
+/* helpers */
+.fmt{font-variant-numeric:tabular-nums}
+.row-total-highlight td{background:rgba(240,165,58,.06);font-weight:700;color:var(--amber);border-top:2px solid rgba(240,165,58,.25) !important}
+
+/* price-db highlight (editable price) */
+.price-cell input{color:var(--amber) !important}
+
+/* select with green border when auto-linked */
+.linked-select{border-color:rgba(76,175,125,.4) !important}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<div class="nav">
+  <button class="active" onclick="goTo('calc')">📊 الحاسبة</button>
+  <button onclick="goTo('mdb')">🧱 قاعدة المواد</button>
+  <button onclick="goTo('idb')">🔩 قاعدة الحديد</button>
+  <button onclick="goTo('inst')">📖 التعليمات</button>
+</div>
+
+<!-- ════════ PAGE: الحاسبة ════════ -->
+<div class="page show" id="pg_calc">
+  <div class="pg-head"><h1>🏗️ حاسبة تكلفة الهياكل المعدنية وألواح الأسمنت</h1><p>المدخلات الزرقاء قابلة للتعديل — الحسابات تتحدث تلقائيًا</p></div>
+
+  <!-- أبعاد -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card">
+      <div class="ch"><span class="icon">📐</span><h2>أبعاد المشروع</h2></div>
+      <div class="cb">
+        <div class="ig">
+          <div class="ig-item"><label>الطول</label><div class="iw"><input type="number" id="i_L" value="10" oninput="calc()"><span class="u">م</span></div></div>
+          <div class="ig-item"><label>العرض</label><div class="iw"><input type="number" id="i_W" value="22" oninput="calc()"><span class="u">م</span></div></div>
+          <div class="ig-item"><label>الارتفاع</label><div class="iw"><input type="number" id="i_H" value="3" oninput="calc()"><span class="u">م</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span class="icon">🪟</span><h2>أبعاد الزجاج / الفتحات</h2></div>
+      <div class="cb">
+        <div class="ig">
+          <div class="ig-item"><label>طول الزجاج</label><div class="iw"><input type="number" id="i_gL" value="3" oninput="calc()"><span class="u">م</span></div></div>
+          <div class="ig-item"><label>عرض الزجاج</label><div class="iw"><input type="number" id="i_gW" value="1" oninput="calc()"><span class="u">م</span></div></div>
+          <div class="ig-item"><label>عدد الفتحات</label><div class="iw"><input type="number" id="i_gN" value="31" oninput="calc()"><span class="u">عدد</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- حسابات تلقائية -->
+  <div class="card">
+    <div class="ch"><span class="icon">📊</span><h2>الحسابات التلقائية</h2></div>
+    <div class="cb">
+      <div class="acr">
+        <div class="ac-item"><div class="al">مساحة الأرضية</div><div class="av fmt" id="o_floor">—</div><div class="au">م²</div></div>
+        <div class="ac-item"><div class="al">محيط المبنى</div><div class="av fmt" id="o_peri">—</div><div class="au">م</div></div>
+        <div class="ac-item"><div class="al">مساحة الجدران الكلية</div><div class="av fmt" id="o_wG">—</div><div class="au">م²</div></div>
+        <div class="ac-item"><div class="al">مساحة الزجاج</div><div class="av fmt" id="o_glass">—</div><div class="au">م²</div></div>
+        <div class="ac-item"><div class="al">مساحة الجدران الصافية</div><div class="av fmt" id="o_wN">—</div><div class="au">م²</div></div>
+        <div class="ac-item"><div class="al">مساحة السقف</div><div class="av fmt" id="o_roof">—</div><div class="au">م²</div></div>
+      </div>
+      <div class="legend"><div class="legend-i"><div class="ld b"></div>المدخلات (قابلة للتعديل)</div><div class="legend-i"><div class="ld g"></div>الحسابات التلقائية</div></div>
+    </div>
+  </div>
+
+  <!-- المواد -->
+  <div class="card">
+    <div class="ch"><span class="icon">🧱</span><h2>المواد والتشطيبات</h2></div>
+    <div class="cb">
+      <div class="tw"><table><thead><tr>
+        <th style="width:26px"></th><th>المادة</th><th>النوع</th><th>السمك</th><th>سعر الوحدة</th><th>الوحدة</th><th>الكمية</th><th>الإجمالي (ر.س)</th><th>ملاحظات</th><th style="width:26px"></th>
+      </tr></thead><tbody id="tb_mat"></tbody></table></div>
+      <button class="btn-add" onclick="addMat()">＋ إضافة مادة</button>
+    </div>
+  </div>
+
+  <!-- الهيكل الحديدي -->
+  <div class="card">
+    <div class="ch"><span class="icon">🔩</span><h2>الهيكل الحديدي</h2></div>
+    <div class="cb">
+      <div class="tw"><table><thead><tr>
+        <th>#</th><th>النوع</th><th>المقاس</th><th>السمك (mm)</th><th>الطول (m)</th><th>سعر الوحدة</th><th>الكمية</th><th>الإجمالي (ر.س)</th><th style="width:26px"></th>
+      </tr></thead><tbody id="tb_iron"></tbody></table></div>
+      <button class="btn-add" onclick="addIron()">＋ إضافة عنصر</button>
+      <div style="margin-top:12px;text-align:left"><span style="color:var(--amber);font-weight:700;font-size:.84rem" class="fmt">إجمالي الحديد: <span id="o_ironT">0</span> ر.س</span></div>
+    </div>
+  </div>
+
+  <!-- العمالة -->
+  <div class="card">
+    <div class="ch"><span class="icon">👷</span><h2>العمالة والتركيب</h2></div>
+    <div class="cb">
+      <div class="tw"><table><thead><tr>
+        <th>البند</th><th>الوصف</th><th>سعر الوحدة</th><th>الوحدة</th><th>الكمية</th><th>الإجمالي (ر.س)</th><th>ملاحظات</th><th style="width:26px"></th>
+      </tr></thead><tbody id="tb_lab"></tbody></table></div>
+      <button class="btn-add" onclick="addLab()">＋ إضافة بند</button>
+      <div style="margin-top:12px;text-align:left"><span style="color:var(--green);font-weight:700;font-size:.84rem" class="fmt">إجمالي العمالة: <span id="o_labT">0</span> ر.س</span></div>
+    </div>
+  </div>
+
+  <!-- الملخص -->
+  <div class="card">
+    <div class="ch"><span class="icon">💰</span><h2>ملخص التكاليف والأسعار</h2></div>
+    <div class="cb">
+      <div class="sc-row">
+        <div class="sc m"><div class="sl">المواد والتشطيبات</div><div class="sv fmt" id="s_mat">0</div><div style="color:var(--dim);font-size:.7rem">ر.س</div></div>
+        <div class="sc i"><div class="sl">الهيكل الحديدي</div><div class="sv fmt" id="s_iron">0</div><div style="color:var(--dim);font-size:.7rem">ر.س</div></div>
+        <div class="sc l"><div class="sl">العمالة</div><div class="sv fmt" id="s_lab">0</div><div style="color:var(--dim);font-size:.7rem">ر.س</div></div>
+      </div>
+      <div class="total-box">
+        <div><div class="tbl">إجمالي التكلفة</div><div class="tbv fmt" id="s_total">0</div></div>
+        <div style="text-align:left"><div class="tbl">التكلفة لكل م² أرضية</div><div class="tbv fmt" id="s_m2" style="font-size:1.15rem;color:var(--amber)">0</div><div class="tbs">ر.س / م²</div></div>
+      </div>
+      <div class="profit-row">
+        <div class="pri"><span class="prl">نسبة الربح %</span><div class="iw" style="position:relative"><input type="number" id="i_profit" value="0" oninput="calc()"><span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:.7rem;color:var(--dim);pointer-events:none">%</span></div></div>
+        <div class="pri" style="text-align:left"><span class="prl">الربح المتوقع</span><span class="prv fmt" id="s_profAmt">0 ر.س</span></div>
+        <div class="pri" style="text-align:left"><span class="prl">سعر البيع (مع الربح)</span><span class="prv fmt" id="s_sale" style="color:var(--red);font-size:1.1rem">0 ر.س</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ PAGE: قاعدة المواد ════════ -->
+<div class="page" id="pg_mdb">
+  <div class="pg-head"><h1>🧱 قاعدة المواد</h1><p>غيّر الأسعار هنا وتتحدث الحاسبة تلقائيًا</p></div>
+  <div class="card">
+    <div class="ch"><span class="icon">📋</span><h2>جدول أسعار المواد المرجعي</h2></div>
+    <div class="cb">
+      <div class="tw"><table><thead><tr>
+        <th style="width:26px"></th><th>الفئة</th><th>النوع</th><th>السمك</th><th>الوحدة</th><th style="color:var(--amber)">سعر الوحدة (ر.س)</th><th>ملاحظات</th><th style="width:26px"></th>
+      </tr></thead><tbody id="tb_mdb"></tbody></table></div>
+      <button class="btn-add" onclick="addMdbRow()">＋ إضافة مادة جديدة</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ PAGE: قاعدة الحديد ════════ -->
+<div class="page" id="pg_idb">
+  <div class="pg-head"><h1>🔩 قاعدة الحديد</h1><p>أدخل أنواع الحديد وأسعارها — تتحدث في الحاسبة تلقائيًا</p></div>
+  <div class="card">
+    <div class="ch"><span class="icon">📋</span><h2>جدول أسعار الحديد المرجعي</h2></div>
+    <div class="cb">
+      <div class="tw"><table><thead><tr>
+        <th style="width:26px"></th><th>النوع</th><th>المقاس</th><th>السمك (mm)</th><th>الطول (m)</th><th style="color:var(--amber)">سعر الوحدة (ر.س)</th><th style="width:26px"></th>
+      </tr></thead><tbody id="tb_idb"></tbody></table></div>
+      <button class="btn-add" onclick="addIdbRow()">＋ إضافة نوع حديد جديد</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ PAGE: التعليمات ════════ -->
+<div class="page" id="pg_inst">
+  <div class="pg-head"><h1>📖 دليل الاستخدام</h1><p>كل ما تحتاجه لتشغيل الحاسبة</p></div>
+  <div class="card">
+    <div class="ch"><span class="icon">📌</span><h2>خطوات الاستخدام</h2></div>
+    <div class="cb">
+      <ol class="inst-list">
+        <li><div class="num">1</div><div class="txt">أدخل أبعاد المشروع <strong>(الطول / العرض / الارتفاع)</strong> في صفحة الحاسبة</div></li>
+        <li><div class="num">2</div><div class="txt">أدخل أبعاد الزجاج والفتحات <strong>(طول / عرض / عدد)</strong> والكميات تحسب تلقائيًا</div></li>
+        <li><div class="num">3</div><div class="txt">اختر نوع وسمك كل مادة من القوائم — السعر يجيك تلقائيًا من <strong>قاعدة المواد</strong></div></li>
+        <li><div class="num">4</div><div class="txt">اذهب لصفحة <strong>قاعدة الحديد</strong> وأدخل أنواع الحديد وأسعارها</div></li>
+        <li><div class="num">5</div><div class="txt">حدد <strong>نسبة الربح</strong> المطلوبة في قسم الملخص</div></li>
+        <li><div class="num">6</div><div class="txt">شاهد النتائج الكاملة في <strong>ملخص التكاليف والأسعار</strong> !</div></li>
+      </ol>
+    </div>
+  </div>
+  <div class="note-box">
+    <h3>⚠️ ملاحظات مهمة</h3>
+    <ul>
+      <li><span class="ic">🔵</span> الخانات الزرقاء = مدخلات قابلة للتعديل</li>
+      <li><span class="ic">🟢</span> الخانات الخضراء = حسابات تلقائية</li>
+      <li><span class="ic">🟠</span> الأسعار في <strong>قاعدة المواد</strong> و<strong>قاعدة الحديد</strong> قابلة للتغيير ممكن تعدّلها متى شاء</li>
+      <li><span class="ic">➕</span> يمكنك إضافة مواد أو عناصر حديد جديدة في كل جدول</li>
+      <li><span class="ic">📊</span> التكلفة الإجمالية تشمل: المواد + الحديد + العمالة</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ SCRIPT ════════ -->
+<script>
+// ─── DATA STORES ──────────────────────────────────────────────
+// قاعدة المواد (صفحة مستقلة + مصدر الأسعار)
+let mdb = [
+  {cat:'Cement Board', type:'Standard',   thick:'6mm',  unit:'لوح', price:41,  note:'سعر اللوح'},
+  {cat:'Cement Board', type:'Standard',   thick:'9mm',  unit:'لوح', price:45,  note:''},
+  {cat:'Cement Board', type:'Standard',   thick:'10mm', unit:'لوح', price:85,  note:''},
+  {cat:'Cement Board', type:'Exterior',   thick:'12mm', unit:'لوح', price:70,  note:''},
+  {cat:'Cement Board', type:'Exterior',   thick:'9mm',  unit:'لوح', price:45,  note:''},
+  {cat:'Cement Board', type:'Exterior',   thick:'15mm', unit:'لوح', price:110, note:''},
+  {cat:'Cement Board', type:'Fire-Resistant', thick:'10mm', unit:'لوح', price:105, note:''},
+  {cat:'Cement Board', type:'Fire-Resistant', thick:'12mm', unit:'لوح', price:120, note:''},
+  {cat:'Cement Board', type:'Waterproof', thick:'12mm', unit:'لوح', price:115, note:''},
+  {cat:'Gypsum Board', type:'Regular',    thick:'12.5mm', unit:'لوح', price:30,  note:'سعر اللوح'},
+  {cat:'Gypsum Board', type:'Moisture Resistant', thick:'12.5mm', unit:'لوح', price:45, note:''},
+  {cat:'Gypsum Board', type:'Fire Rated', thick:'12.5mm', unit:'لوح', price:55,  note:''},
+  {cat:'Insulation',   type:'Rockwool',   thick:'50mm', unit:'م²',  price:55,  note:'للمتر المربع'},
+  {cat:'Insulation',   type:'Rockwool',   thick:'75mm', unit:'م²',  price:70,  note:''},
+  {cat:'Insulation',   type:'Rockwool',   thick:'100mm',unit:'م²',  price:90,  note:''},
+  {cat:'Insulation',   type:'Glasswool',  thick:'50mm', unit:'م²',  price:45,  note:''},
+  {cat:'Insulation',   type:'Glasswool',  thick:'75mm', unit:'م²',  price:60,  note:''},
+  {cat:'Insulation',   type:'XPS Foam',   thick:'50mm', unit:'م²',  price:65,  note:''},
+  {cat:'Insulation',   type:'XPS Foam',   thick:'75mm', unit:'م²',  price:85,  note:''},
+  {cat:'Glass',        type:'Clear',      thick:'6mm',  unit:'م²',  price:90,  note:'للمتر المربع'},
+  {cat:'Glass',        type:'Clear',      thick:'8mm',  unit:'م²',  price:110, note:''},
+  {cat:'Glass',        type:'Tinted',     thick:'6mm',  unit:'م²',  price:110, note:''},
+  {cat:'Glass',        type:'Tinted',     thick:'8mm',  unit:'م²',  price:130, note:''},
+  {cat:'Glass',        type:'Tempered',   thick:'8mm',  unit:'م²',  price:140, note:''},
+  {cat:'Glass',        type:'Tempered',   thick:'12mm', unit:'م²',  price:170, note:''},
+  {cat:'Glass',        type:'Double-Glazed', thick:'12mm', unit:'م²', price:200, note:''},
+  {cat:'Roof Panel',   type:'Sandwich Panel', thick:'50mm',  unit:'م²', price:100, note:'للمتر المربع'},
+  {cat:'Roof Panel',   type:'Sandwich Panel', thick:'75mm',  unit:'م²', price:130, note:''},
+  {cat:'Roof Panel',   type:'Sandwich Panel', thick:'100mm', unit:'م²', price:112, note:''},
+  {cat:'Roof Panel',   type:'Shinko',     thick:'Standard', unit:'م²', price:80,  note:''},
+  {cat:'Roof Panel',   type:'Metal Sheet',thick:'0.5mm', unit:'م²',  price:70,  note:''},
+  {cat:'Roof Panel',   type:'Metal Sheet',thick:'0.7mm', unit:'م²',  price:85,  note:''},
+];
+
+// قاعدة الحديد المرجعية
+let idb = [
+  {type:'تيوب',    size:'10*10',  thick:'1.25', len:6, price:84},
+  {type:'تيوب',    size:'20*20',  thick:'1.25', len:6, price:120},
+  {type:'تيوب',    size:'30*60',  thick:'1.25', len:6, price:30},
+  {type:'تيوب',    size:'40*80',  thick:'1.5',  len:6, price:40},
+  {type:'جسر H',   size:'10*16',  thick:'10',   len:6, price:230},
+  {type:'جسر H',   size:'15*20',  thick:'12',   len:6, price:320},
+  {type:'زاوية',   size:'40*40',  thick:'4',    len:6, price:45},
+  {type:'زاوية',   size:'50*50',  thick:'5',    len:6, price:65},
+  {type:'مجرى C',  size:'10*5',   thick:'2',    len:6, price:55},
+  {type:'مجرى C',  size:'15*7',   thick:'2.5',  len:6, price:75},
+];
+
+// المواد في الحاسبة (الصفحة الرئيسية)
+let mats = [
+  {name:'ألواح أسمنتية خارجية', type:'Exterior',        thick:'12mm', price:65, unit:'لوح', qty:35, note:'الطبقة الخارجية', autoQty:false},
+  {name:'ألواح أسمنتية داخلية', type:'Standard',        thick:'9mm',  price:45, unit:'لوح', qty:35, note:'الطبقة الداخلية', autoQty:false},
+  {name:'عزل حراري (جدران)',    type:'Rockwool',         thick:'50mm', price:55, unit:'م²',  qty:0,  note:'تلقائي',         autoQty:'wallsNet'},
+  {name:'زجاج (نوافذ/أبواب)',   type:'Tempered',         thick:'12mm', price:170,unit:'م²',  qty:0,  note:'تلقائي',         autoQty:'glassArea'},
+  {name:'سقف (ساندوتش بانل)',   type:'Sandwich Panel',   thick:'100mm',price:112,unit:'م²',  qty:0,  note:'تلقائي',         autoQty:'roof'},
+  {name:'مسامير وإكسسوارات',    type:'—',                thick:'—',    price:15, unit:'م²',  qty:0,  note:'تقدير 15 ر.س/م²',autoQty:'totalSurface'},
+  {name:'أعمال الدهان',         type:'—',                thick:'—',    price:25, unit:'م²',  qty:0,  note:'تقدير 25 ر.س/م²',autoQty:'wallsNet'},
+];
+
+// الهيكل الحديدي في الحاسبة
+let irons = [
+  {type:'تيوب',  size:'10*10',  thick:'1.25', len:6, price:84,  qty:4},
+  {type:'تيوب',  size:'30*60',  thick:'1.25', len:6, price:30,  qty:6},
+  {type:'جسر H', size:'10*16',  thick:'10',   len:6, price:230, qty:1},
+];
+
+// العمالة
+let labs = [
+  {name:'تركيب الهيكل الحديدي', desc:'لحام + تركيب',      price:50, unit:'م²', note:'تقدير 50 ر.س/م²', autoQty:'floor'},
+  {name:'تركيب الألواح والعزل', desc:'ألواح + عزل',        price:35, unit:'م²', note:'تقدير 35 ر.س/م²', autoQty:'totalSurface'},
+  {name:'تركيب السقف',          desc:'ساندوتش / شينكو',    price:40, unit:'م²', note:'تقدير 40 ر.س/م²', autoQty:'roof'},
+];
+
+// ─── COMPUTED ─────────────────────────────────────────────────
+let C = {};
+function dims(){
+  const L=+v('i_L'),W=+v('i_W'),H=+v('i_H');
+  const gL=+v('i_gL'),gW=+v('i_gW'),gN=+v('i_gN');
+  C.floor     = L*W;
+  C.peri      = 2*(L+W);
+  C.wallsGross= C.peri*H;
+  C.glassArea = gL*gW*gN;
+  C.wallsNet  = C.wallsGross - C.glassArea;
+  C.roof      = C.floor;
+  C.totalSurface = C.wallsGross + C.floor; // جدران كلية + أرضية
+}
+function v(id){return document.getElementById(id)?.value||0}
+function fmt(n){return (n==null||isNaN(n))?'0':Number(n).toLocaleString('ar-SA',{maximumFractionDigits:2})}
+
+// resolve autoQty
+function autoQ(key){
+  if(!key) return null;
+  return C[key]!=null ? C[key] : 0;
+}
+
+// ─── PAGE NAV ─────────────────────────────────────────────────
+function goTo(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('show'));
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('pg_'+id).classList.add('show');
+  const idx = ['calc','mdb','idb','inst'].indexOf(id);
+  document.querySelectorAll('.nav button')[idx].classList.add('active');
+  if(id==='calc') calc();
+  if(id==='mdb') renderMdb();
+  if(id==='idb') renderIdb();
+}
+
+// ─── CALC (main page) ─────────────────────────────────────────
+function calc(){
+  dims();
+  // update auto-calc display
+  document.getElementById('o_floor').textContent  = fmt(C.floor);
+  document.getElementById('o_peri').textContent   = fmt(C.peri);
+  document.getElementById('o_wG').textContent     = fmt(C.wallsGross);
+  document.getElementById('o_glass').textContent  = fmt(C.glassArea);
+  document.getElementById('o_wN').textContent     = fmt(C.wallsNet);
+  document.getElementById('o_roof').textContent   = fmt(C.roof);
+
+  renderMats();
+  renderIrons();
+  renderLabs();
+
+  // totals
+  let matT=0, ironT=0, labT=0;
+  mats.forEach(m=>{let q=m.autoQty?autoQ(m.autoQty):m.qty; matT+=m.price*q;});
+  irons.forEach(it=> ironT+=it.price*it.qty);
+  labs.forEach(lb=>{let q=lb.autoQty?autoQ(lb.autoQty):0; labT+=lb.price*q;});
+
+  document.getElementById('o_ironT').textContent  = fmt(ironT);
+  document.getElementById('o_labT').textContent   = fmt(labT);
+  document.getElementById('s_mat').textContent    = fmt(matT);
+  document.getElementById('s_iron').textContent   = fmt(ironT);
+  document.getElementById('s_lab').textContent    = fmt(labT);
+
+  const grand = matT+ironT+labT;
+  const perM2  = C.floor ? grand/C.floor : 0;
+  const pct    = +v('i_profit');
+  const profAmt= grand*pct/100;
+
+  document.getElementById('s_total').textContent    = fmt(grand);
+  document.getElementById('s_m2').textContent       = fmt(perM2);
+  document.getElementById('s_profAmt').textContent  = fmt(profAmt)+' ر.س';
+  document.getElementById('s_sale').textContent     = fmt(grand+profAmt)+' ر.س';
+}
+
+// ─── RENDER MATS ──────────────────────────────────────────────
+function renderMats(){
+  const tb = document.getElementById('tb_mat');
+  // build category dropdown options from mdb
+  const cats = [...new Set(mdb.map(r=>r.cat))];
+  const catMap = { 'ألواح أسمنتية خارجية':'Cement Board', 'ألواح أسمنتية داخلية':'Cement Board',
+                   'عزل حراري (جدران)':'Insulation', 'زجاج (نوافذ/أبواب)':'Glass',
+                   'سقف (ساندوتش بانل)':'Roof Panel' };
+
+  tb.innerHTML = mats.map((m,i)=>{
+    const q = m.autoQty ? autoQ(m.autoQty) : m.qty;
+    const tot = m.price * q;
+    // type options from mdb filtered by relevant cat
+    const cat = catMap[m.name] || '';
+    const types = [...new Set(mdb.filter(r=>r.cat===cat).map(r=>r.type))];
+    const thicks= [...new Set(mdb.filter(r=>r.cat===cat && r.type===m.type).map(r=>r.thick))];
+
+    let typeOpts = types.length ? types.map(t=>`<option value="${t}" ${m.type===t?'selected':''} >${t}</option>`).join('') : `<option>${m.type}</option>`;
+    let thickOpts= thicks.length ? thicks.map(t=>`<option value="${t}" ${m.thick===t?'selected':''} >${t}</option>`).join('') : `<option>${m.thick}</option>`;
+
+    return `<tr>
+      <td class="rn">${i+1}</td>
+      <td><input type="text" value="${m.name}" oninput="mats[${i}].name=this.value;calc()"></td>
+      <td>${types.length ? `<select onchange="mats[${i}].type=this.value;syncPrice(${i});calc()">` + typeOpts + '</select>' : `<input type="text" value="${m.type}" oninput="mats[${i}].type=this.value">`}</td>
+      <td>${thicks.length ? `<select onchange="mats[${i}].thick=this.value;syncPrice(${i});calc()">` + thickOpts + '</select>' : `<input type="text" value="${m.thick}" oninput="mats[${i}].thick=this.value">`}</td>
+      <td class="price-cell"><input type="number" value="${m.price}" oninput="mats[${i}].price=+this.value;calc()"></td>
+      <td><input type="text" value="${m.unit}" readonly style="color:var(--dim);font-weight:400;pointer-events:none"></td>
+      <td>${m.autoQty ? `<input type="number" class="ro" value="${fmt(q)}" readonly>` : `<input type="number" value="${q}" oninput="mats[${i}].qty=+this.value;calc()">`}</td>
+      <td><input type="text" class="ro" value="${fmt(tot)}" readonly></td>
+      <td class="nc">${m.note}</td>
+      <td><button class="btn-del" onclick="mats.splice(${i},1);calc()">×</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// sync price from mdb when type/thick changes
+function syncPrice(i){
+  const m = mats[i];
+  const catMap = { 'ألواح أسمنتية خارجية':'Cement Board', 'ألواح أسمنتية داخلية':'Cement Board',
+                   'عزل حراري (جدران)':'Insulation', 'زجاج (نوافذ/أبواب)':'Glass',
+                   'سقف (ساندوتش بانل)':'Roof Panel' };
+  const cat = catMap[m.name];
+  const match = mdb.find(r=> r.cat===cat && r.type===m.type && r.thick===m.thick);
+  if(match) m.price = match.price;
+}
+
+function addMat(){
+  mats.push({name:'مادة جديدة',type:'—',thick:'—',price:0,unit:'م²',qty:0,note:'',autoQty:false});
+  calc();
+}
+
+// ─── RENDER IRONS ─────────────────────────────────────────────
+function renderIrons(){
+  const tb = document.getElementById('tb_iron');
+  // build type options from idb
+  const types = [...new Set(idb.map(r=>r.type))];
+
+  tb.innerHTML = irons.map((it,i)=>{
+    const tot = it.price * it.qty;
+    const sizes = [...new Set(idb.filter(r=>r.type===it.type).map(r=>r.size))];
+    let typeOpts = types.map(t=>`<option value="${t}" ${it.type===t?'selected':''} >${t}</option>`).join('');
+    let sizeOpts = sizes.length ? sizes.map(s=>`<option value="${s}" ${it.size===s?'selected':''} >${s}</option>`).join('') : `<option>${it.size}</option>`;
+
+    return `<tr>
+      <td class="rn">${i+1}</td>
+      <td><select onchange="irons[${i}].type=this.value;syncIronPrice(${i});calc()">${typeOpts}</select></td>
+      <td>${sizes.length ? `<select onchange="irons[${i}].size=this.value;syncIronPrice(${i});calc()">${sizeOpts}</select>` : `<input type="text" value="${it.size}" oninput="irons[${i}].size=this.value;calc()">`}</td>
+      <td><input type="text" value="${it.thick}" readonly style="color:var(--dim);font-weight:400;pointer-events:none"></td>
+      <td><input type="text" value="${it.len}" readonly style="color:var(--dim);font-weight:400;pointer-events:none"></td>
+      <td class="price-cell"><input type="number" value="${it.price}" oninput="irons[${i}].price=+this.value;calc()"></td>
+      <td><input type="number" value="${it.qty}" oninput="irons[${i}].qty=+this.value;calc()"></td>
+      <td><input type="text" class="ro" value="${fmt(tot)}" readonly></td>
+      <td><button class="btn-del" onclick="irons.splice(${i},1);calc()">×</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function syncIronPrice(i){
+  const it = irons[i];
+  const match = idb.find(r=> r.type===it.type && r.size===it.size);
+  if(match){ it.price=match.price; it.thick=match.thick; it.len=match.len; }
+}
+
+function addIron(){
+  irons.push({type:idb[0].type, size:idb[0].size, thick:idb[0].thick, len:idb[0].len, price:idb[0].price, qty:0});
+  calc();
+}
+
+// ─── RENDER LABS ──────────────────────────────────────────────
+function renderLabs(){
+  const tb = document.getElementById('tb_lab');
+  tb.innerHTML = labs.map((lb,i)=>{
+    const q = lb.autoQty ? autoQ(lb.autoQty) : 0;
+    const tot = lb.price * q;
+    return `<tr>
+      <td><input type="text" value="${lb.name}" oninput="labs[${i}].name=this.value;calc()"></td>
+      <td><input type="text" value="${lb.desc}" oninput="labs[${i}].desc=this.value"></td>
+      <td class="price-cell"><input type="number" value="${lb.price}" oninput="labs[${i}].price=+this.value;calc()"></td>
+      <td><input type="text" value="${lb.unit}" readonly style="color:var(--dim);font-weight:400;pointer-events:none"></td>
+      <td><input type="number" class="ro" value="${fmt(q)}" readonly></td>
+      <td><input type="text" class="ro" value="${fmt(tot)}" readonly></td>
+      <td class="nc">${lb.note}</td>
+      <td><button class="btn-del" onclick="labs.splice(${i},1);calc()">×</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function addLab(){
+  labs.push({name:'بند جديد', desc:'—', price:0, unit:'م²', note:'', autoQty:false});
+  calc();
+}
+
+// ─── RENDER MDB (قاعدة المواد page) ──────────────────────────
+function renderMdb(){
+  const tb = document.getElementById('tb_mdb');
+  tb.innerHTML = mdb.map((r,i)=> `<tr>
+    <td class="rn">${i+1}</td>
+    <td><input type="text" value="${r.cat}" oninput="mdb[${i}].cat=this.value;renderMdb();calc()"></td>
+    <td><input type="text" value="${r.type}" oninput="mdb[${i}].type=this.value;renderMdb();calc()"></td>
+    <td><input type="text" value="${r.thick}" oninput="mdb[${i}].thick=this.value;renderMdb();calc()"></td>
+    <td><input type="text" value="${r.unit}" oninput="mdb[${i}].unit=this.value"></td>
+    <td class="price-cell"><input type="number" value="${r.price}" oninput="mdb[${i}].price=+this.value;syncAllFromMdb();calc()"></td>
+    <td class="nc">${r.note}</td>
+    <td><button class="btn-del" onclick="mdb.splice(${i},1);renderMdb();calc()">×</button></td>
+  </tr>`).join('');
+}
+
+// when mdb price changes → update matching mats prices
+function syncAllFromMdb(){
+  const catMap = { 'ألواح أسمنتية خارجية':'Cement Board', 'ألواح أسمنتية داخلية':'Cement Board',
+                   'عزل حراري (جدران)':'Insulation', 'زجاج (نوافذ/أبواب)':'Glass',
+                   'سقف (ساندوتش بانل)':'Roof Panel' };
+  mats.forEach(m=>{
+    const cat = catMap[m.name];
+    if(!cat) return;
+    const match = mdb.find(r=> r.cat===cat && r.type===m.type && r.thick===m.thick);
+    if(match) m.price = match.price;
+  });
+}
+
+function addMdbRow(){
+  mdb.push({cat:'Cement Board', type:'Standard', thick:'6mm', unit:'لوح', price:0, note:''});
+  renderMdb();
+}
+
+// ─── RENDER IDB (قاعدة الحديد page) ──────────────────────────
+function renderIdb(){
+  const tb = document.getElementById('tb_idb');
+  tb.innerHTML = idb.map((r,i)=> `<tr>
+    <td class="rn">${i+1}</td>
+    <td><input type="text" value="${r.type}" oninput="idb[${i}].type=this.value;renderIdb();calc()"></td>
+    <td><input type="text" value="${r.size}" oninput="idb[${i}].size=this.value;renderIdb();calc()"></td>
+    <td><input type="text" value="${r.thick}" oninput="idb[${i}].thick=this.value"></td>
+    <td><input type="number" value="${r.len}" oninput="idb[${i}].len=+this.value"></td>
+    <td class="price-cell"><input type="number" value="${r.price}" oninput="idb[${i}].price=+this.value;syncAllFromIdb();calc()"></td>
+    <td><button class="btn-del" onclick="idb.splice(${i},1);renderIdb();calc()">×</button></td>
+  </tr>`).join('');
+}
+
+function syncAllFromIdb(){
+  irons.forEach(it=>{
+    const match = idb.find(r=> r.type===it.type && r.size===it.size);
+    if(match) it.price = match.price;
+  });
+}
+
+function addIdbRow(){
+  idb.push({type:'تيوب', size:'—', thick:'—', len:6, price:0});
+  renderIdb();
+}
+
+// ─── INIT ─────────────────────────────────────────────────────
+calc();
+</script>
+</body>
+</html>
