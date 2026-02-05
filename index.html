@@ -304,87 +304,22 @@ td input.wide{width:100%}
       <li><span class="ic">🟠</span> الأسعار في <strong>قاعدة المواد</strong> و<strong>قاعدة الحديد</strong> قابلة للتغيير ممكن تعدّلها متى شاء</li>
       <li><span class="ic">➕</span> يمكنك إضافة مواد أو عناصر حديد جديدة في كل جدول</li>
       <li><span class="ic">📊</span> التكلفة الإجمالية تشمل: المواد + الحديد + العمالة</li>
+      <li><span class="ic">💾</span> البيانات تُحفظ تلقائيًا في المتصفح — لو أغلقت الصفحة بياناتك ما تروح</li>
     </ul>
+  </div>
+  <div style="margin-top:18px;text-align:center">
+    <button onclick="if(confirm('هل أنت متأكد؟ سيتم إرجاع جميع البيانات للقيم الافتراضية')){resetDatabase();calc();goTo('calc');}" style="background:rgba(239,83,80,.1);border:1px solid rgba(239,83,80,.3);color:var(--red);padding:10px 24px;border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit;transition:.2s">🔄 إعادة تعيين قاعدة البيانات</button>
   </div>
 </div>
 
+<!-- ════════════════════════════════════════════ DATABASE ════════ -->
+<script src="database.js"></script>
+
 <!-- ════════════════════════════════════════════ SCRIPT ════════ -->
 <script>
-// ─── DATA STORES ──────────────────────────────────────────────
-// قاعدة المواد (صفحة مستقلة + مصدر الأسعار)
-let mdb = [
-  {cat:'Cement Board', type:'Standard',   thick:'6mm',  unit:'لوح', price:41,  note:'سعر اللوح'},
-  {cat:'Cement Board', type:'Standard',   thick:'9mm',  unit:'لوح', price:45,  note:''},
-  {cat:'Cement Board', type:'Standard',   thick:'10mm', unit:'لوح', price:85,  note:''},
-  {cat:'Cement Board', type:'Exterior',   thick:'12mm', unit:'لوح', price:70,  note:''},
-  {cat:'Cement Board', type:'Exterior',   thick:'9mm',  unit:'لوح', price:45,  note:''},
-  {cat:'Cement Board', type:'Exterior',   thick:'15mm', unit:'لوح', price:110, note:''},
-  {cat:'Cement Board', type:'Fire-Resistant', thick:'10mm', unit:'لوح', price:105, note:''},
-  {cat:'Cement Board', type:'Fire-Resistant', thick:'12mm', unit:'لوح', price:120, note:''},
-  {cat:'Cement Board', type:'Waterproof', thick:'12mm', unit:'لوح', price:115, note:''},
-  {cat:'Gypsum Board', type:'Regular',    thick:'12.5mm', unit:'لوح', price:30,  note:'سعر اللوح'},
-  {cat:'Gypsum Board', type:'Moisture Resistant', thick:'12.5mm', unit:'لوح', price:45, note:''},
-  {cat:'Gypsum Board', type:'Fire Rated', thick:'12.5mm', unit:'لوح', price:55,  note:''},
-  {cat:'Insulation',   type:'Rockwool',   thick:'50mm', unit:'م²',  price:55,  note:'للمتر المربع'},
-  {cat:'Insulation',   type:'Rockwool',   thick:'75mm', unit:'م²',  price:70,  note:''},
-  {cat:'Insulation',   type:'Rockwool',   thick:'100mm',unit:'م²',  price:90,  note:''},
-  {cat:'Insulation',   type:'Glasswool',  thick:'50mm', unit:'م²',  price:45,  note:''},
-  {cat:'Insulation',   type:'Glasswool',  thick:'75mm', unit:'م²',  price:60,  note:''},
-  {cat:'Insulation',   type:'XPS Foam',   thick:'50mm', unit:'م²',  price:65,  note:''},
-  {cat:'Insulation',   type:'XPS Foam',   thick:'75mm', unit:'م²',  price:85,  note:''},
-  {cat:'Glass',        type:'Clear',      thick:'6mm',  unit:'م²',  price:90,  note:'للمتر المربع'},
-  {cat:'Glass',        type:'Clear',      thick:'8mm',  unit:'م²',  price:110, note:''},
-  {cat:'Glass',        type:'Tinted',     thick:'6mm',  unit:'م²',  price:110, note:''},
-  {cat:'Glass',        type:'Tinted',     thick:'8mm',  unit:'م²',  price:130, note:''},
-  {cat:'Glass',        type:'Tempered',   thick:'8mm',  unit:'م²',  price:140, note:''},
-  {cat:'Glass',        type:'Tempered',   thick:'12mm', unit:'م²',  price:170, note:''},
-  {cat:'Glass',        type:'Double-Glazed', thick:'12mm', unit:'م²', price:200, note:''},
-  {cat:'Roof Panel',   type:'Sandwich Panel', thick:'50mm',  unit:'م²', price:100, note:'للمتر المربع'},
-  {cat:'Roof Panel',   type:'Sandwich Panel', thick:'75mm',  unit:'م²', price:130, note:''},
-  {cat:'Roof Panel',   type:'Sandwich Panel', thick:'100mm', unit:'م²', price:112, note:''},
-  {cat:'Roof Panel',   type:'Shinko',     thick:'Standard', unit:'م²', price:80,  note:''},
-  {cat:'Roof Panel',   type:'Metal Sheet',thick:'0.5mm', unit:'م²',  price:70,  note:''},
-  {cat:'Roof Panel',   type:'Metal Sheet',thick:'0.7mm', unit:'م²',  price:85,  note:''},
-];
-
-// قاعدة الحديد المرجعية
-let idb = [
-  {type:'تيوب',    size:'10*10',  thick:'1.25', len:6, price:84},
-  {type:'تيوب',    size:'20*20',  thick:'1.25', len:6, price:120},
-  {type:'تيوب',    size:'30*60',  thick:'1.25', len:6, price:30},
-  {type:'تيوب',    size:'40*80',  thick:'1.5',  len:6, price:40},
-  {type:'جسر H',   size:'10*16',  thick:'10',   len:6, price:230},
-  {type:'جسر H',   size:'15*20',  thick:'12',   len:6, price:320},
-  {type:'زاوية',   size:'40*40',  thick:'4',    len:6, price:45},
-  {type:'زاوية',   size:'50*50',  thick:'5',    len:6, price:65},
-  {type:'مجرى C',  size:'10*5',   thick:'2',    len:6, price:55},
-  {type:'مجرى C',  size:'15*7',   thick:'2.5',  len:6, price:75},
-];
-
-// المواد في الحاسبة (الصفحة الرئيسية)
-let mats = [
-  {name:'ألواح أسمنتية خارجية', type:'Exterior',        thick:'12mm', price:65, unit:'لوح', qty:35, note:'الطبقة الخارجية', autoQty:false},
-  {name:'ألواح أسمنتية داخلية', type:'Standard',        thick:'9mm',  price:45, unit:'لوح', qty:35, note:'الطبقة الداخلية', autoQty:false},
-  {name:'عزل حراري (جدران)',    type:'Rockwool',         thick:'50mm', price:55, unit:'م²',  qty:0,  note:'تلقائي',         autoQty:'wallsNet'},
-  {name:'زجاج (نوافذ/أبواب)',   type:'Tempered',         thick:'12mm', price:170,unit:'م²',  qty:0,  note:'تلقائي',         autoQty:'glassArea'},
-  {name:'سقف (ساندوتش بانل)',   type:'Sandwich Panel',   thick:'100mm',price:112,unit:'م²',  qty:0,  note:'تلقائي',         autoQty:'roof'},
-  {name:'مسامير وإكسسوارات',    type:'—',                thick:'—',    price:15, unit:'م²',  qty:0,  note:'تقدير 15 ر.س/م²',autoQty:'totalSurface'},
-  {name:'أعمال الدهان',         type:'—',                thick:'—',    price:25, unit:'م²',  qty:0,  note:'تقدير 25 ر.س/م²',autoQty:'wallsNet'},
-];
-
-// الهيكل الحديدي في الحاسبة
-let irons = [
-  {type:'تيوب',  size:'10*10',  thick:'1.25', len:6, price:84,  qty:4},
-  {type:'تيوب',  size:'30*60',  thick:'1.25', len:6, price:30,  qty:6},
-  {type:'جسر H', size:'10*16',  thick:'10',   len:6, price:230, qty:1},
-];
-
-// العمالة
-let labs = [
-  {name:'تركيب الهيكل الحديدي', desc:'لحام + تركيب',      price:50, unit:'م²', note:'تقدير 50 ر.س/م²', autoQty:'floor'},
-  {name:'تركيب الألواح والعزل', desc:'ألواح + عزل',        price:35, unit:'م²', note:'تقدير 35 ر.س/م²', autoQty:'totalSurface'},
-  {name:'تركيب السقف',          desc:'ساندوتش / شينكو',    price:40, unit:'م²', note:'تقدير 40 ر.س/م²', autoQty:'roof'},
-];
+// ─── DATA STORES (تحميل من ملف قاعدة البيانات) ────────────────
+let mdb, idb, mats, irons, labs;
+loadDatabase();
 
 // ─── COMPUTED ─────────────────────────────────────────────────
 let C = {};
@@ -456,6 +391,9 @@ function calc(){
   document.getElementById('s_m2').textContent       = fmt(perM2);
   document.getElementById('s_profAmt').textContent  = fmt(profAmt)+' ر.س';
   document.getElementById('s_sale').textContent     = fmt(grand+profAmt)+' ر.س';
+
+  // حفظ تلقائي
+  saveDatabase();
 }
 
 // ─── RENDER MATS ──────────────────────────────────────────────
@@ -601,6 +539,7 @@ function syncAllFromMdb(){
 function addMdbRow(){
   mdb.push({cat:'Cement Board', type:'Standard', thick:'6mm', unit:'لوح', price:0, note:''});
   renderMdb();
+  saveDatabase();
 }
 
 // ─── RENDER IDB (قاعدة الحديد page) ──────────────────────────
@@ -627,6 +566,7 @@ function syncAllFromIdb(){
 function addIdbRow(){
   idb.push({type:'تيوب', size:'—', thick:'—', len:6, price:0});
   renderIdb();
+  saveDatabase();
 }
 
 // ─── INIT ─────────────────────────────────────────────────────
