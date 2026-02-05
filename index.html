@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>حاسبة تكلفة الهياكل المعدنية</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap');
 :root{
@@ -128,6 +129,12 @@ td input.wide{width:100%}
 /* select with green border when auto-linked */
 .linked-select{border-color:rgba(76,175,125,.4) !important}
 
+/* ─── DB TOOLBAR ─── */
+.db-toolbar{display:flex;justify-content:center;gap:8px;padding:8px 12px;flex-wrap:wrap}
+.db-toolbar button{background:var(--card2);border:1px solid var(--border);color:var(--dim);padding:6px 14px;border-radius:8px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;transition:.2s}
+.db-toolbar button:hover{border-color:var(--green);color:var(--green)}
+.db-toolbar .db-status{font-size:.7rem;color:var(--green);align-self:center;display:none}
+
 /* ─── EMPLOYEE CARDS ─── */
 .emp-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
 .emp-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
@@ -174,6 +181,12 @@ td input.wide{width:100%}
   <button onclick="goTo('mdb')">🧱 قاعدة المواد</button>
   <button onclick="goTo('idb')">🔩 قاعدة الحديد</button>
   <button onclick="goTo('inst')">📖 التعليمات</button>
+</div>
+<div class="db-toolbar">
+  <button onclick="downloadDB()">💾 تحميل قاعدة البيانات</button>
+  <button onclick="document.getElementById('dbFileInput').click()">📂 استيراد قاعدة بيانات</button>
+  <input type="file" id="dbFileInput" accept=".db,.sqlite,.sqlite3" style="display:none" onchange="importDB(event)">
+  <span class="db-status" id="dbStatus"></span>
 </div>
 
 <!-- ════════ PAGE: الحاسبة ════════ -->
@@ -549,8 +562,11 @@ td input.wide{width:100%}
 
 <!-- ════════════════════════════════════════════ SCRIPT ════════ -->
 <script>
-// ─── DATA STORES ──────────────────────────────────────────────
-let mdb = [
+// ─── SQLite DATABASE ENGINE ───────────────────────────────────
+let DB = null; // sql.js Database instance
+
+// ─── DEFAULT DATA (used when creating fresh DB) ───────────────
+const DEFAULT_MDB = [
   {cat:'Cement Board', type:'Standard',   thick:'6mm',  unit:'لوح', price:41,  note:'سعر اللوح'},
   {cat:'Cement Board', type:'Standard',   thick:'9mm',  unit:'لوح', price:45,  note:''},
   {cat:'Cement Board', type:'Standard',   thick:'10mm', unit:'لوح', price:85,  note:''},
@@ -584,8 +600,7 @@ let mdb = [
   {cat:'Roof Panel',   type:'Metal Sheet',thick:'0.5mm', unit:'م²',  price:70,  note:''},
   {cat:'Roof Panel',   type:'Metal Sheet',thick:'0.7mm', unit:'م²',  price:85,  note:''},
 ];
-
-let idb = [
+const DEFAULT_IDB = [
   {type:'تيوب',    size:'10*10',  thick:'1.25', len:6, price:84},
   {type:'تيوب',    size:'20*20',  thick:'1.25', len:6, price:120},
   {type:'تيوب',    size:'30*60',  thick:'1.25', len:6, price:30},
@@ -597,8 +612,7 @@ let idb = [
   {type:'مجرى C',  size:'10*5',   thick:'2',    len:6, price:55},
   {type:'مجرى C',  size:'15*7',   thick:'2.5',  len:6, price:75},
 ];
-
-let mats = [
+const DEFAULT_MATS = [
   {name:'ألواح أسمنتية خارجية', type:'Exterior',        thick:'12mm', price:65, unit:'لوح', qty:0, note:'تلقائي (0.35 لوح/م²)', autoQty:'wallsNetBoards'},
   {name:'ألواح أسمنتية داخلية', type:'Standard',        thick:'9mm',  price:45, unit:'لوح', qty:0, note:'تلقائي (0.35 لوح/م²)', autoQty:'wallsNetBoards'},
   {name:'عزل حراري (جدران)',    type:'Rockwool',         thick:'50mm', price:55, unit:'م²',  qty:0,  note:'تلقائي',         autoQty:'wallsNet'},
@@ -607,18 +621,24 @@ let mats = [
   {name:'مسامير وإكسسوارات',    type:'—',                thick:'—',    price:15, unit:'م²',  qty:0,  note:'تقدير 15 ر.س/م²',autoQty:'totalSurface'},
   {name:'أعمال الدهان',         type:'—',                thick:'—',    price:25, unit:'م²',  qty:0,  note:'تقدير 25 ر.س/م²',autoQty:'wallsNet'},
 ];
-
-let irons = [
+const DEFAULT_IRONS = [
   {type:'تيوب',  size:'10*10',  thick:'1.25', len:6, price:84,  qty:4},
   {type:'تيوب',  size:'30*60',  thick:'1.25', len:6, price:30,  qty:6},
   {type:'جسر H', size:'10*16',  thick:'10',   len:6, price:230, qty:1},
 ];
-
-let labs = [
+const DEFAULT_LABS = [
   {name:'تركيب الهيكل الحديدي', desc:'لحام + تركيب',      price:50, unit:'م²', note:'تقدير 50 ر.س/م²', autoQty:'floor'},
   {name:'تركيب الألواح والعزل', desc:'ألواح + عزل',        price:35, unit:'م²', note:'تقدير 35 ر.س/م²', autoQty:'totalSurface'},
   {name:'تركيب السقف',          desc:'ساندوتش / شينكو',    price:40, unit:'م²', note:'تقدير 40 ر.س/م²', autoQty:'roof'},
 ];
+const DEFAULT_EMPLOYEES = [
+  {name:'يوسف',role:'مدير',salary:2200},
+  {name:'عارف',role:'حداد',salary:1800},
+  {name:'ذو الفقار',role:'كهربائي',salary:1800},
+];
+
+// ─── LIVE DATA ARRAYS (populated from SQLite) ─────────────────
+let mdb = [], idb = [], mats = [], irons = [], labs = [];
 
 let C = {};
 function dims(){
@@ -669,7 +689,12 @@ function calc(){
   document.getElementById('s_m2').textContent=fmt(perM2);
   document.getElementById('s_profAmt').textContent=fmt(profAmt)+' ر.س';
   document.getElementById('s_sale').textContent=fmt(grand+profAmt)+' ر.س';
+  debouncedSave();
 }
+
+// Debounced save to avoid excessive writes during typing
+let _saveTimer=null;
+function debouncedSave(){if(_saveTimer)clearTimeout(_saveTimer);_saveTimer=setTimeout(()=>{saveToDB();},1500);}
 
 function renderMats(){
   const tb=document.getElementById('tb_mat');
@@ -685,7 +710,7 @@ function renderMats(){
   }).join('');
 }
 function syncPrice(i){const m=mats[i];const catMap={'ألواح أسمنتية خارجية':'Cement Board','ألواح أسمنتية داخلية':'Cement Board','عزل حراري (جدران)':'Insulation','زجاج (نوافذ/أبواب)':'Glass','سقف (ساندوتش بانل)':'Roof Panel'};const cat=catMap[m.name];const match=mdb.find(r=>r.cat===cat&&r.type===m.type&&r.thick===m.thick);if(match)m.price=match.price;}
-function addMat(){mats.push({name:'مادة جديدة',type:'—',thick:'—',price:0,unit:'م²',qty:0,note:'',autoQty:false});calc();}
+function addMat(){mats.push({name:'مادة جديدة',type:'—',thick:'—',price:0,unit:'م²',qty:0,note:'',autoQty:false});calc();saveToDB();}
 
 function renderIrons(){
   const tb=document.getElementById('tb_iron'), types=[...new Set(idb.map(r=>r.type))];
@@ -697,26 +722,382 @@ function renderIrons(){
   }).join('');
 }
 function syncIronPrice(i){const it=irons[i];const match=idb.find(r=>r.type===it.type&&r.size===it.size);if(match){it.price=match.price;it.thick=match.thick;it.len=match.len;}}
-function addIron(){irons.push({type:idb[0].type,size:idb[0].size,thick:idb[0].thick,len:idb[0].len,price:idb[0].price,qty:0});calc();}
+function addIron(){irons.push({type:idb[0].type,size:idb[0].size,thick:idb[0].thick,len:idb[0].len,price:idb[0].price,qty:0});calc();saveToDB();}
 
 function renderLabs(){const tb=document.getElementById('tb_lab');tb.innerHTML=labs.map((lb,i)=>{const q=lb.autoQty?autoQ(lb.autoQty):0,tot=lb.price*q;return `<tr><td><input type="text" value="${lb.name}" oninput="labs[${i}].name=this.value;calc()"></td><td><input type="text" value="${lb.desc}" oninput="labs[${i}].desc=this.value"></td><td class="price-cell"><input type="number" value="${lb.price}" oninput="labs[${i}].price=+this.value;calc()"></td><td><input type="text" value="${lb.unit}" readonly style="color:var(--dim);font-weight:400;pointer-events:none"></td><td><input type="number" class="ro" value="${fmt(q)}" readonly></td><td><input type="text" class="ro" value="${fmt(tot)}" readonly></td><td class="nc">${lb.note}</td><td><button class="btn-del" onclick="labs.splice(${i},1);calc()">×</button></td></tr>`;}).join('');}
 function addLab(){labs.push({name:'بند جديد',desc:'—',price:0,unit:'م²',note:'',autoQty:false});calc();}
 
-function renderMdb(){const tb=document.getElementById('tb_mdb');tb.innerHTML=mdb.map((r,i)=>`<tr><td class="rn">${i+1}</td><td><input type="text" value="${r.cat}" oninput="mdb[${i}].cat=this.value;renderMdb();calc()"></td><td><input type="text" value="${r.type}" oninput="mdb[${i}].type=this.value;renderMdb();calc()"></td><td><input type="text" value="${r.thick}" oninput="mdb[${i}].thick=this.value;renderMdb();calc()"></td><td><input type="text" value="${r.unit}" oninput="mdb[${i}].unit=this.value"></td><td class="price-cell"><input type="number" value="${r.price}" oninput="mdb[${i}].price=+this.value;syncAllFromMdb();calc()"></td><td class="nc">${r.note}</td><td><button class="btn-del" onclick="mdb.splice(${i},1);renderMdb();calc()">×</button></td></tr>`).join('');}
+function renderMdb(){const tb=document.getElementById('tb_mdb');tb.innerHTML=mdb.map((r,i)=>`<tr><td class="rn">${i+1}</td><td><input type="text" value="${r.cat}" oninput="mdb[${i}].cat=this.value;renderMdb();calc()"></td><td><input type="text" value="${r.type}" oninput="mdb[${i}].type=this.value;renderMdb();calc()"></td><td><input type="text" value="${r.thick}" oninput="mdb[${i}].thick=this.value;renderMdb();calc()"></td><td><input type="text" value="${r.unit}" oninput="mdb[${i}].unit=this.value;debouncedSave()"></td><td class="price-cell"><input type="number" value="${r.price}" oninput="mdb[${i}].price=+this.value;syncAllFromMdb();calc()"></td><td class="nc">${r.note}</td><td><button class="btn-del" onclick="mdb.splice(${i},1);renderMdb();calc()">×</button></td></tr>`).join('');}
 function syncAllFromMdb(){const catMap={'ألواح أسمنتية خارجية':'Cement Board','ألواح أسمنتية داخلية':'Cement Board','عزل حراري (جدران)':'Insulation','زجاج (نوافذ/أبواب)':'Glass','سقف (ساندوتش بانل)':'Roof Panel'};mats.forEach(m=>{const cat=catMap[m.name];if(!cat)return;const match=mdb.find(r=>r.cat===cat&&r.type===m.type&&r.thick===m.thick);if(match)m.price=match.price;});}
-function addMdbRow(){mdb.push({cat:'Cement Board',type:'Standard',thick:'6mm',unit:'لوح',price:0,note:''});renderMdb();}
+function addMdbRow(){mdb.push({cat:'Cement Board',type:'Standard',thick:'6mm',unit:'لوح',price:0,note:''});renderMdb();saveToDB();}
 
-function renderIdb(){const tb=document.getElementById('tb_idb');tb.innerHTML=idb.map((r,i)=>`<tr><td class="rn">${i+1}</td><td><input type="text" value="${r.type}" oninput="idb[${i}].type=this.value;renderIdb();calc()"></td><td><input type="text" value="${r.size}" oninput="idb[${i}].size=this.value;renderIdb();calc()"></td><td><input type="text" value="${r.thick}" oninput="idb[${i}].thick=this.value"></td><td><input type="number" value="${r.len}" oninput="idb[${i}].len=+this.value"></td><td class="price-cell"><input type="number" value="${r.price}" oninput="idb[${i}].price=+this.value;syncAllFromIdb();calc()"></td><td><button class="btn-del" onclick="idb.splice(${i},1);renderIdb();calc()">×</button></td></tr>`).join('');}
+function renderIdb(){const tb=document.getElementById('tb_idb');tb.innerHTML=idb.map((r,i)=>`<tr><td class="rn">${i+1}</td><td><input type="text" value="${r.type}" oninput="idb[${i}].type=this.value;renderIdb();calc()"></td><td><input type="text" value="${r.size}" oninput="idb[${i}].size=this.value;renderIdb();calc()"></td><td><input type="text" value="${r.thick}" oninput="idb[${i}].thick=this.value;debouncedSave()"></td><td><input type="number" value="${r.len}" oninput="idb[${i}].len=+this.value;debouncedSave()"></td><td class="price-cell"><input type="number" value="${r.price}" oninput="idb[${i}].price=+this.value;syncAllFromIdb();calc()"></td><td><button class="btn-del" onclick="idb.splice(${i},1);renderIdb();calc()">×</button></td></tr>`).join('');}
 function syncAllFromIdb(){irons.forEach(it=>{const match=idb.find(r=>r.type===it.type&&r.size===it.size);if(match)it.price=match.price;});}
-function addIdbRow(){idb.push({type:'تيوب',size:'—',thick:'—',len:6,price:0});renderIdb();}
+function addIdbRow(){idb.push({type:'تيوب',size:'—',thick:'—',len:6,price:0});renderIdb();saveToDB();}
 
 // ─── EMPLOYEE MANAGEMENT ──────────────────────────────────────
-let employees=[{name:'يوسف',role:'مدير',salary:2200,tools:[]},{name:'عارف',role:'حداد',salary:1800,tools:[]},{name:'ذو الفقار',role:'كهربائي',salary:1800,tools:[]}];
+let employees=[];
 let carRecords=[];
 let savedProjects=[];
 
-function loadEmployeeData(){const s=localStorage.getItem('employeesData');if(s)employees=JSON.parse(s);const c=localStorage.getItem('carRecords');if(c)carRecords=JSON.parse(c);const p=localStorage.getItem('savedProjects');if(p)savedProjects=JSON.parse(p);}
-function saveEmployeeData(){localStorage.setItem('employeesData',JSON.stringify(employees));localStorage.setItem('carRecords',JSON.stringify(carRecords));localStorage.setItem('savedProjects',JSON.stringify(savedProjects));}
+// ═══ SQLite SCHEMA & PERSISTENCE ═══════════════════════════════
+const DB_NAME='steel_calc_db';
+const IDB_STORE='sqlite_store';
+const IDB_KEY='main_db';
+
+function createSchema(){
+  DB.run(`CREATE TABLE IF NOT EXISTS materials_ref (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cat TEXT, type TEXT, thick TEXT, unit TEXT, price REAL, note TEXT
+  )`);
+  DB.run(`CREATE TABLE IF NOT EXISTS iron_ref (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT, size TEXT, thick TEXT, len REAL, price REAL
+  )`);
+  DB.run(`CREATE TABLE IF NOT EXISTS calc_materials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT, type TEXT, thick TEXT, price REAL, unit TEXT, qty REAL, note TEXT, autoQty TEXT
+  )`);
+  DB.run(`CREATE TABLE IF NOT EXISTS calc_irons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT, size TEXT, thick TEXT, len REAL, price REAL, qty REAL
+  )`);
+  DB.run(`CREATE TABLE IF NOT EXISTS calc_labs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT, descr TEXT, price REAL, unit TEXT, note TEXT, autoQty TEXT
+  )`);
+  DB.run(`CREATE TABLE IF NOT EXISTS employees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT, role TEXT, salary REAL
+  )`);
+  DB.run(`CREATE TABLE IF NOT EXISTS employee_tools (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER, name TEXT, value REAL, date TEXT,
+    FOREIGN KEY(employee_id) REFERENCES employees(id)
+  )`);
+  DB.run(`CREATE TABLE IF NOT EXISTS car_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT, type TEXT, details TEXT, amount REAL, odometer TEXT
+  )`);
+  DB.run(`CREATE TABLE IF NOT EXISTS projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER UNIQUE, name TEXT, date TEXT, month TEXT,
+    dim_l REAL, dim_w REAL, dim_h REAL,
+    baseCost REAL, profitPercent REAL, baseProfit REAL, salePrice REAL,
+    status TEXT, blueprint TEXT, profit REAL, totalCost REAL
+  )`);
+  DB.run(`CREATE TABLE IF NOT EXISTS project_materials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER, cat TEXT, name TEXT, type TEXT, thick TEXT,
+    price REAL, unit TEXT, qty REAL, note TEXT, autoQty TEXT,
+    FOREIGN KEY(project_id) REFERENCES projects(project_id)
+  )`);
+  DB.run(`CREATE TABLE IF NOT EXISTS project_irons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER, type TEXT, size TEXT, thick TEXT, len REAL, price REAL, qty REAL,
+    FOREIGN KEY(project_id) REFERENCES projects(project_id)
+  )`);
+  DB.run(`CREATE TABLE IF NOT EXISTS project_additional_costs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER, cost_type TEXT, data_json TEXT,
+    FOREIGN KEY(project_id) REFERENCES projects(project_id)
+  )`);
+}
+
+function seedDefaults(){
+  // Only seed if tables are empty
+  const mc=DB.exec("SELECT COUNT(*) as c FROM materials_ref");
+  if(mc[0].values[0][0]===0){
+    const stmt=DB.prepare("INSERT INTO materials_ref(cat,type,thick,unit,price,note) VALUES(?,?,?,?,?,?)");
+    DEFAULT_MDB.forEach(r=>{stmt.run([r.cat,r.type,r.thick,r.unit,r.price,r.note]);});stmt.free();
+  }
+  const ic=DB.exec("SELECT COUNT(*) as c FROM iron_ref");
+  if(ic[0].values[0][0]===0){
+    const stmt=DB.prepare("INSERT INTO iron_ref(type,size,thick,len,price) VALUES(?,?,?,?,?)");
+    DEFAULT_IDB.forEach(r=>{stmt.run([r.type,r.size,r.thick,r.len,r.price]);});stmt.free();
+  }
+  const cc=DB.exec("SELECT COUNT(*) as c FROM calc_materials");
+  if(cc[0].values[0][0]===0){
+    const stmt=DB.prepare("INSERT INTO calc_materials(name,type,thick,price,unit,qty,note,autoQty) VALUES(?,?,?,?,?,?,?,?)");
+    DEFAULT_MATS.forEach(r=>{stmt.run([r.name,r.type,r.thick,r.price,r.unit,r.qty,r.note,r.autoQty||'']);});stmt.free();
+  }
+  const ci=DB.exec("SELECT COUNT(*) as c FROM calc_irons");
+  if(ci[0].values[0][0]===0){
+    const stmt=DB.prepare("INSERT INTO calc_irons(type,size,thick,len,price,qty) VALUES(?,?,?,?,?,?)");
+    DEFAULT_IRONS.forEach(r=>{stmt.run([r.type,r.size,r.thick,r.len,r.price,r.qty]);});stmt.free();
+  }
+  const cl=DB.exec("SELECT COUNT(*) as c FROM calc_labs");
+  if(cl[0].values[0][0]===0){
+    const stmt=DB.prepare("INSERT INTO calc_labs(name,descr,price,unit,note,autoQty) VALUES(?,?,?,?,?,?)");
+    DEFAULT_LABS.forEach(r=>{stmt.run([r.name,r.desc,r.price,r.unit,r.note,r.autoQty||'']);});stmt.free();
+  }
+  const ec=DB.exec("SELECT COUNT(*) as c FROM employees");
+  if(ec[0].values[0][0]===0){
+    const stmt=DB.prepare("INSERT INTO employees(name,role,salary) VALUES(?,?,?)");
+    DEFAULT_EMPLOYEES.forEach(r=>{stmt.run([r.name,r.role,r.salary]);});stmt.free();
+  }
+}
+
+// ─── Load arrays from SQLite ──────────────────────────────────
+function loadFromDB(){
+  mdb=[];idb=[];mats=[];irons=[];labs=[];employees=[];carRecords=[];savedProjects=[];
+
+  // materials_ref
+  let res=DB.exec("SELECT cat,type,thick,unit,price,note FROM materials_ref ORDER BY id");
+  if(res.length)res[0].values.forEach(r=>{mdb.push({cat:r[0],type:r[1],thick:r[2],unit:r[3],price:r[4],note:r[5]||''});});
+
+  // iron_ref
+  res=DB.exec("SELECT type,size,thick,len,price FROM iron_ref ORDER BY id");
+  if(res.length)res[0].values.forEach(r=>{idb.push({type:r[0],size:r[1],thick:r[2],len:r[3],price:r[4]});});
+
+  // calc_materials
+  res=DB.exec("SELECT name,type,thick,price,unit,qty,note,autoQty FROM calc_materials ORDER BY id");
+  if(res.length)res[0].values.forEach(r=>{mats.push({name:r[0],type:r[1],thick:r[2],price:r[3],unit:r[4],qty:r[5],note:r[6]||'',autoQty:r[7]||false});});
+
+  // calc_irons
+  res=DB.exec("SELECT type,size,thick,len,price,qty FROM calc_irons ORDER BY id");
+  if(res.length)res[0].values.forEach(r=>{irons.push({type:r[0],size:r[1],thick:r[2],len:r[3],price:r[4],qty:r[5]});});
+
+  // calc_labs
+  res=DB.exec("SELECT name,descr,price,unit,note,autoQty FROM calc_labs ORDER BY id");
+  if(res.length)res[0].values.forEach(r=>{labs.push({name:r[0],desc:r[1],price:r[2],unit:r[3],note:r[4]||'',autoQty:r[5]||false});});
+
+  // employees + tools
+  res=DB.exec("SELECT id,name,role,salary FROM employees ORDER BY id");
+  if(res.length)res[0].values.forEach(r=>{
+    const eid=r[0],tools=[];
+    const tr=DB.exec("SELECT name,value,date FROM employee_tools WHERE employee_id="+eid+" ORDER BY id");
+    if(tr.length)tr[0].values.forEach(t=>{tools.push({name:t[0],value:t[1],date:t[2]});});
+    employees.push({_id:eid,name:r[1],role:r[2],salary:r[3],tools:tools});
+  });
+
+  // car_records
+  res=DB.exec("SELECT date,type,details,amount,odometer FROM car_records ORDER BY id");
+  if(res.length)res[0].values.forEach(r=>{carRecords.push({date:r[0],type:r[1],details:r[2],amount:r[3],odometer:r[4]||''});});
+
+  // projects
+  res=DB.exec("SELECT project_id,name,date,month,dim_l,dim_w,dim_h,baseCost,profitPercent,baseProfit,salePrice,status,blueprint,profit,totalCost FROM projects ORDER BY project_id");
+  if(res.length)res[0].values.forEach(r=>{
+    const pid=r[0];
+    // project materials
+    const pm=[];
+    const pmr=DB.exec("SELECT cat,name,type,thick,price,unit,qty,note,autoQty FROM project_materials WHERE project_id="+pid+" ORDER BY id");
+    if(pmr.length)pmr[0].values.forEach(m=>{pm.push({cat:m[0],name:m[1]||'',type:m[2],thick:m[3],price:m[4],unit:m[5],qty:m[6],note:m[7]||'',autoQty:m[8]||false});});
+    // project irons
+    const pi=[];
+    const pir=DB.exec("SELECT type,size,thick,len,price,qty FROM project_irons WHERE project_id="+pid+" ORDER BY id");
+    if(pir.length)pir[0].values.forEach(ir=>{pi.push({type:ir[0],size:ir[1],thick:ir[2],len:ir[3],price:ir[4],qty:ir[5]});});
+    // additional costs
+    const ac={transport:[],dailyWorkers:[],materials:[],other:[]};
+    const acr=DB.exec("SELECT cost_type,data_json FROM project_additional_costs WHERE project_id="+pid+" ORDER BY id");
+    if(acr.length)acr[0].values.forEach(a=>{try{ac[a[0]].push(JSON.parse(a[1]));}catch(e){}});
+    savedProjects.push({id:pid,name:r[1],date:r[2],month:r[3],dimensions:{L:r[4],W:r[5],H:r[6]},baseCost:r[7],profitPercent:r[8],baseProfit:r[9],salePrice:r[10],status:r[11],blueprint:r[12],profit:r[13],totalCost:r[14],materials:pm,irons:pi,additionalCosts:ac});
+  });
+}
+
+// ─── Save arrays to SQLite ────────────────────────────────────
+function saveToDB(){
+  if(!DB)return;
+  // materials_ref
+  DB.run("DELETE FROM materials_ref");
+  const s1=DB.prepare("INSERT INTO materials_ref(cat,type,thick,unit,price,note) VALUES(?,?,?,?,?,?)");
+  mdb.forEach(r=>{s1.run([r.cat,r.type,r.thick,r.unit,r.price,r.note||'']);});s1.free();
+
+  // iron_ref
+  DB.run("DELETE FROM iron_ref");
+  const s2=DB.prepare("INSERT INTO iron_ref(type,size,thick,len,price) VALUES(?,?,?,?,?)");
+  idb.forEach(r=>{s2.run([r.type,r.size,r.thick,r.len,r.price]);});s2.free();
+
+  // calc_materials
+  DB.run("DELETE FROM calc_materials");
+  const s3=DB.prepare("INSERT INTO calc_materials(name,type,thick,price,unit,qty,note,autoQty) VALUES(?,?,?,?,?,?,?,?)");
+  mats.forEach(r=>{s3.run([r.name,r.type,r.thick,r.price,r.unit,r.qty,r.note||'',r.autoQty||'']);});s3.free();
+
+  // calc_irons
+  DB.run("DELETE FROM calc_irons");
+  const s4=DB.prepare("INSERT INTO calc_irons(type,size,thick,len,price,qty) VALUES(?,?,?,?,?,?)");
+  irons.forEach(r=>{s4.run([r.type,r.size,r.thick,r.len,r.price,r.qty]);});s4.free();
+
+  // calc_labs
+  DB.run("DELETE FROM calc_labs");
+  const s5=DB.prepare("INSERT INTO calc_labs(name,descr,price,unit,note,autoQty) VALUES(?,?,?,?,?,?)");
+  labs.forEach(r=>{s5.run([r.name,r.desc||'',r.price,r.unit,r.note||'',r.autoQty||'']);});s5.free();
+
+  // employees + tools
+  DB.run("DELETE FROM employee_tools");
+  DB.run("DELETE FROM employees");
+  const se=DB.prepare("INSERT INTO employees(name,role,salary) VALUES(?,?,?)");
+  const st=DB.prepare("INSERT INTO employee_tools(employee_id,name,value,date) VALUES(?,?,?,?)");
+  employees.forEach(emp=>{
+    se.run([emp.name,emp.role,emp.salary]);
+    const eid=DB.exec("SELECT last_insert_rowid()")[0].values[0][0];
+    emp._id=eid;
+    (emp.tools||[]).forEach(t=>{st.run([eid,t.name,t.value,t.date]);});
+  });se.free();st.free();
+
+  // car_records
+  DB.run("DELETE FROM car_records");
+  const sc=DB.prepare("INSERT INTO car_records(date,type,details,amount,odometer) VALUES(?,?,?,?,?)");
+  carRecords.forEach(r=>{sc.run([r.date,r.type,r.details,r.amount,r.odometer||'']);});sc.free();
+
+  // projects
+  DB.run("DELETE FROM project_additional_costs");
+  DB.run("DELETE FROM project_irons");
+  DB.run("DELETE FROM project_materials");
+  DB.run("DELETE FROM projects");
+  const sp=DB.prepare("INSERT INTO projects(project_id,name,date,month,dim_l,dim_w,dim_h,baseCost,profitPercent,baseProfit,salePrice,status,blueprint,profit,totalCost) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+  const spm=DB.prepare("INSERT INTO project_materials(project_id,cat,name,type,thick,price,unit,qty,note,autoQty) VALUES(?,?,?,?,?,?,?,?,?,?)");
+  const spi=DB.prepare("INSERT INTO project_irons(project_id,type,size,thick,len,price,qty) VALUES(?,?,?,?,?,?,?)");
+  const sac=DB.prepare("INSERT INTO project_additional_costs(project_id,cost_type,data_json) VALUES(?,?,?)");
+  savedProjects.forEach(p=>{
+    sp.run([p.id,p.name,p.date,p.month,p.dimensions.L,p.dimensions.W,p.dimensions.H||0,p.baseCost||0,p.profitPercent||0,p.baseProfit||0,p.salePrice||0,p.status||'جاري',p.blueprint||null,p.profit||0,p.totalCost||0]);
+    (p.materials||[]).forEach(m=>{spm.run([p.id,m.cat||'',m.name||'',m.type,m.thick,m.price||0,m.unit||'',m.qty||0,m.note||'',m.autoQty||'']);});
+    (p.irons||[]).forEach(ir=>{spi.run([p.id,ir.type,ir.size,ir.thick,ir.len||0,ir.price||0,ir.qty||0]);});
+    if(p.additionalCosts){
+      ['transport','dailyWorkers','materials','other'].forEach(ct=>{
+        (p.additionalCosts[ct]||[]).forEach(item=>{sac.run([p.id,ct,JSON.stringify(item)]);});
+      });
+    }
+  });sp.free();spm.free();spi.free();sac.free();
+
+  persistDBToIndexedDB();
+}
+
+// ─── IndexedDB persistence for SQLite binary ──────────────────
+function openIDB(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB_NAME,1);
+    req.onupgradeneeded=()=>{req.result.createObjectStore(IDB_STORE);};
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function persistDBToIndexedDB(){
+  try{
+    const data=DB.export();
+    const idbConn=await openIDB();
+    const tx=idbConn.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).put(data,IDB_KEY);
+    tx.oncomplete=()=>{idbConn.close();showDBStatus('تم الحفظ');};
+    tx.onerror=()=>{idbConn.close();};
+  }catch(e){console.warn('IndexedDB save failed:',e);}
+}
+async function loadDBFromIndexedDB(){
+  try{
+    const idbConn=await openIDB();
+    return new Promise((resolve,reject)=>{
+      const tx=idbConn.transaction(IDB_STORE,'readonly');
+      const req=tx.objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess=()=>{idbConn.close();resolve(req.result||null);};
+      req.onerror=()=>{idbConn.close();resolve(null);};
+    });
+  }catch(e){return null;}
+}
+
+// ─── Download / Import DB ─────────────────────────────────────
+function downloadDB(){
+  if(!DB)return;
+  saveToDB();
+  const data=DB.export();
+  const blob=new Blob([data],{type:'application/x-sqlite3'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='steel_calculator_'+new Date().toISOString().split('T')[0]+'.db';
+  a.click();
+  URL.revokeObjectURL(url);
+  showDBStatus('تم تحميل الملف');
+}
+async function importDB(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  try{
+    const buf=await file.arrayBuffer();
+    const uArr=new Uint8Array(buf);
+    DB.close();
+    DB=new SQL.Database(uArr);
+    loadFromDB();
+    await persistDBToIndexedDB();
+    calc();
+    renderEmployees();renderCarRecords();renderProjects();
+    showDBStatus('تم استيراد قاعدة البيانات');
+    alert('تم استيراد قاعدة البيانات بنجاح!');
+  }catch(e){
+    alert('خطأ في استيراد الملف: '+e.message);
+  }
+  event.target.value='';
+}
+
+function showDBStatus(msg){
+  const el=document.getElementById('dbStatus');
+  if(!el)return;
+  el.textContent='✓ '+msg;
+  el.style.display='inline';
+  setTimeout(()=>{el.style.display='none';},3000);
+}
+
+// ─── Migrate from localStorage to SQLite (one-time) ───────────
+function migrateFromLocalStorage(){
+  let migrated=false;
+  try{
+    const s=localStorage.getItem('employeesData');
+    if(s){
+      const emp=JSON.parse(s);
+      if(emp&&emp.length){
+        DB.run("DELETE FROM employee_tools");DB.run("DELETE FROM employees");
+        const se=DB.prepare("INSERT INTO employees(name,role,salary) VALUES(?,?,?)");
+        const st=DB.prepare("INSERT INTO employee_tools(employee_id,name,value,date) VALUES(?,?,?,?)");
+        emp.forEach(e=>{
+          se.run([e.name,e.role,e.salary]);
+          const eid=DB.exec("SELECT last_insert_rowid()")[0].values[0][0];
+          (e.tools||[]).forEach(t=>{st.run([eid,t.name,t.value,t.date]);});
+        });se.free();st.free();migrated=true;
+      }
+    }
+    const c=localStorage.getItem('carRecords');
+    if(c){
+      const cr=JSON.parse(c);
+      if(cr&&cr.length){
+        DB.run("DELETE FROM car_records");
+        const sc=DB.prepare("INSERT INTO car_records(date,type,details,amount,odometer) VALUES(?,?,?,?,?)");
+        cr.forEach(r=>{sc.run([r.date,r.type,r.details,r.amount,r.odometer||'']);});sc.free();migrated=true;
+      }
+    }
+    const p=localStorage.getItem('savedProjects');
+    if(p){
+      const projs=JSON.parse(p);
+      if(projs&&projs.length){
+        DB.run("DELETE FROM project_additional_costs");DB.run("DELETE FROM project_irons");DB.run("DELETE FROM project_materials");DB.run("DELETE FROM projects");
+        const sp=DB.prepare("INSERT INTO projects(project_id,name,date,month,dim_l,dim_w,dim_h,baseCost,profitPercent,baseProfit,salePrice,status,blueprint,profit,totalCost) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+        const spm=DB.prepare("INSERT INTO project_materials(project_id,cat,name,type,thick,price,unit,qty,note,autoQty) VALUES(?,?,?,?,?,?,?,?,?,?)");
+        const spi=DB.prepare("INSERT INTO project_irons(project_id,type,size,thick,len,price,qty) VALUES(?,?,?,?,?,?,?)");
+        const sac=DB.prepare("INSERT INTO project_additional_costs(project_id,cost_type,data_json) VALUES(?,?,?)");
+        projs.forEach(proj=>{
+          sp.run([proj.id,proj.name,proj.date,proj.month,proj.dimensions?.L||0,proj.dimensions?.W||0,proj.dimensions?.H||0,proj.baseCost||0,proj.profitPercent||0,proj.baseProfit||0,proj.salePrice||0,proj.status||'جاري',proj.blueprint||null,proj.profit||0,proj.totalCost||0]);
+          (proj.materials||[]).forEach(m=>{spm.run([proj.id,m.cat||'',m.name||'',m.type||'',m.thick||'',m.price||0,m.unit||'',m.qty||0,m.note||'',m.autoQty||'']);});
+          (proj.irons||[]).forEach(ir=>{spi.run([proj.id,ir.type||'',ir.size||'',ir.thick||'',ir.len||0,ir.price||0,ir.qty||0]);});
+          if(proj.additionalCosts){['transport','dailyWorkers','materials','other'].forEach(ct=>{(proj.additionalCosts[ct]||[]).forEach(item=>{sac.run([proj.id,ct,JSON.stringify(item)]);});});}
+        });sp.free();spm.free();spi.free();sac.free();migrated=true;
+      }
+    }
+    if(migrated){
+      // Clear old localStorage after migration
+      localStorage.removeItem('employeesData');
+      localStorage.removeItem('carRecords');
+      localStorage.removeItem('savedProjects');
+      localStorage.removeItem('ssc_mdb');
+      localStorage.removeItem('ssc_idb');
+      localStorage.removeItem('ssc_mats');
+      localStorage.removeItem('ssc_irons');
+      localStorage.removeItem('ssc_labs');
+      console.log('Migration from localStorage complete');
+    }
+  }catch(e){console.warn('Migration error:',e);}
+}
+
+// ─── Wrapper: replaces old saveEmployeeData ───────────────────
+function saveEmployeeData(){saveToDB();}
+function loadEmployeeData(){/* data already loaded from SQLite in initApp */}
 
 function renderEmployees(){const container=document.getElementById('employeesList');if(!container)return;container.innerHTML=employees.map((emp,i)=>`<div class="emp-card"><div class="emp-header"><div><div class="emp-name">${emp.name}</div><div class="emp-role">${emp.role}</div></div><div class="emp-salary">${emp.salary.toLocaleString()} ر.س</div></div><div class="emp-section"><div class="emp-section-title">العهد والأدوات المستلمة</div>${emp.tools.length===0?'<div style="color:var(--dim);font-size:.85rem;text-align:center;padding:8px 0">لا توجد أدوات مسجلة</div>':''}${emp.tools.map((tool,ti)=>`<div class="emp-item"><span class="tool-name">${tool.name}</span><span class="tool-date">${tool.date}</span><span class="tool-value">${tool.value.toLocaleString()} ر.س</span><button class="btn-del" onclick="deleteTool(${i},${ti})" style="margin-right:8px">×</button></div>`).join('')}<button class="btn-add" style="margin-top:10px" onclick="addTool(${i})">+ إضافة أداة</button></div></div>`).join('');updateEmployeeSummary();}
 function addTool(ei){const n=prompt('اسم الأداة / المعدة:');if(!n||!n.trim())return;const v=prompt('قيمة الأداة (ر.س):');if(!v)return;const val=parseFloat(v);if(isNaN(val)){alert('يرجى إدخال رقم صحيح');return;}employees[ei].tools.push({name:n.trim(),value:val,date:new Date().toISOString().split('T')[0]});saveEmployeeData();renderEmployees();}
@@ -763,10 +1144,52 @@ function deleteAdditionalCost(type,i){if(!confirm('حذف هذا السجل؟'))
 function uploadBlueprint(event){const file=event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=function(e){const p=savedProjects.find(x=>x.id===currentProjectId);if(!p)return;p.blueprint=e.target.result;saveEmployeeData();openProjectDetails(currentProjectId);};reader.readAsDataURL(file);}
 function printProject(){const p=savedProjects.find(x=>x.id===currentProjectId);if(!p)return;const mT=p.materials?p.materials.reduce((s,m)=>s+((m.price||0)*(m.qty||0)),0):0;const iT=p.irons?p.irons.reduce((s,ir)=>s+((ir.price||0)*(ir.qty||0)),0):0;const bC=mT+iT;let aT=0;let report=`\n════════════════════════════════════════════════\n           تقرير مشروع: ${p.name}\n════════════════════════════════════════════════\n\n📅 التاريخ: ${p.date}\n📐 الأبعاد: ${p.dimensions.L} × ${p.dimensions.W} × ${p.dimensions.H||0} متر\n🔄 الحالة: ${p.status}\n\n────────────────────────────────────────────────\n🧱 المواد والتشطيبات\n────────────────────────────────────────────────\n`;if(p.materials&&p.materials.length>0)p.materials.forEach((mat,i)=>{const total=(mat.price||0)*(mat.qty||0);report+=`${i+1}. ${mat.name||mat.cat} (${mat.type} - ${mat.thick})\n   السعر: ${(mat.price||0).toLocaleString()} ر.س/${mat.unit}\n   الكمية: ${mat.qty} ${mat.unit}\n   الإجمالي: ${total.toLocaleString()} ر.س\n\n`;});report+=`💰 إجمالي المواد: ${mT.toLocaleString()} ر.س\n\n────────────────────────────────────────────────\n🔩 الهيكل الحديدي\n────────────────────────────────────────────────\n`;if(p.irons&&p.irons.length>0)p.irons.forEach((iron,i)=>{const total=(iron.price||0)*(iron.qty||0);report+=`${i+1}. ${iron.type} (${iron.size} - سمك ${iron.thick})\n   الطول: ${iron.len} م | السعر: ${(iron.price||0).toLocaleString()} ر.س | الكمية: ${iron.qty}\n   الإجمالي: ${total.toLocaleString()} ر.س\n\n`;});report+=`💰 إجمالي الحديد: ${iT.toLocaleString()} ر.س\n\n────────────────────────────────────────────────\n📝 المصاريف الإضافية\n────────────────────────────────────────────────\n`;if(p.additionalCosts){if(p.additionalCosts.transport?.length>0){report+='\n🚗 توصيل العمال:\n';p.additionalCosts.transport.forEach(t=>{report+=`   ${t.date}: ${t.amount.toLocaleString()} ر.س${t.notes?' - '+t.notes:''}\n`;aT+=t.amount;});}if(p.additionalCosts.dailyWorkers?.length>0){report+='\n👷 عمال باليومية:\n';p.additionalCosts.dailyWorkers.forEach(w=>{report+=`   ${w.name}: ${w.days} أيام × ${w.wage.toLocaleString()} = ${w.total.toLocaleString()} ر.س\n`;aT+=w.total;});}if(p.additionalCosts.materials?.length>0){report+='\n🧱 مواد إضافية:\n';p.additionalCosts.materials.forEach(m=>{report+=`   ${m.name}: ${m.qty} × ${m.price.toLocaleString()} = ${m.total.toLocaleString()} ر.س\n`;aT+=m.total;});}if(p.additionalCosts.other?.length>0){report+='\n📝 مصاريف أخرى:\n';p.additionalCosts.other.forEach(o=>{report+=`   ${o.description}: ${o.amount.toLocaleString()} ر.س${o.notes?' - '+o.notes:''}\n`;aT+=o.amount;});}}const actT=bC+aT,actP=p.salePrice-actT;report+=`\n────────────────────────────────────────────────\n💵 الحساب النهائي\n────────────────────────────────────────────────\nالتكلفة الأساسية: ${bC.toLocaleString()} ر.س\nالمصاريف الإضافية: ${aT.toLocaleString()} ر.س\n─────────────────────────────────\nالتكلفة الفعلية الكاملة: ${actT.toLocaleString()} ر.س\n\nسعر البيع: ${p.salePrice.toLocaleString()} ر.س\nالربح الفعلي: ${actP.toLocaleString()} ر.س\n\n════════════════════════════════════════════════\n`;const blob=new Blob([report],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`تقرير_${p.name}_${p.date}.txt`;a.click();URL.revokeObjectURL(url);}
 
-// ─── INIT ─────────────────────────────────────────────────────
-calc();
+// ─── INIT (async for SQLite) ──────────────────────────────────
+async function initApp(){
+  try{
+    const sqlPromise=initSqlJs({locateFile:file=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/'+file});
+    const SQL_LIB=await sqlPromise;
 
-function checkPassword(){const input=document.getElementById('passwordInput').value;if(input==='Turki305'){document.getElementById('passwordOverlay').style.display='none';document.getElementById('passwordInput').value='';loadEmployeeData();renderEmployees();renderCarRecords();renderProjects();}else{const e=document.getElementById('errorMsg');e.style.display='block';document.getElementById('passwordInput').value='';document.getElementById('passwordInput').focus();setTimeout(()=>e.style.display='none',3000);}}
+    // Try loading from IndexedDB first
+    const savedData=await loadDBFromIndexedDB();
+    if(savedData){
+      DB=new SQL_LIB.Database(savedData);
+      // ensure schema exists (for upgrades)
+      createSchema();
+    }else{
+      DB=new SQL_LIB.Database();
+      createSchema();
+      seedDefaults();
+      // Migrate any existing localStorage data
+      migrateFromLocalStorage();
+      await persistDBToIndexedDB();
+    }
+
+    // Load all data from SQLite into JS arrays
+    loadFromDB();
+    calc();
+    showDBStatus('قاعدة البيانات SQLite جاهزة');
+  }catch(e){
+    console.error('SQLite init failed:',e);
+    // Fallback: use defaults directly
+    mdb=JSON.parse(JSON.stringify(DEFAULT_MDB));
+    idb=JSON.parse(JSON.stringify(DEFAULT_IDB));
+    mats=JSON.parse(JSON.stringify(DEFAULT_MATS));
+    irons=JSON.parse(JSON.stringify(DEFAULT_IRONS));
+    labs=JSON.parse(JSON.stringify(DEFAULT_LABS));
+    employees=DEFAULT_EMPLOYEES.map(e=>({...e,tools:[]}));
+    calc();
+    alert('تعذر تحميل SQLite. البيانات مؤقتة ولن تُحفظ.');
+  }
+}
+
+// Make SQL available globally for importDB
+let SQL;
+initSqlJs({locateFile:file=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/'+file}).then(s=>{SQL=s;});
+
+initApp();
+
+function checkPassword(){const input=document.getElementById('passwordInput').value;if(input==='Turki305'){document.getElementById('passwordOverlay').style.display='none';document.getElementById('passwordInput').value='';renderEmployees();renderCarRecords();renderProjects();}else{const e=document.getElementById('errorMsg');e.style.display='block';document.getElementById('passwordInput').value='';document.getElementById('passwordInput').focus();setTimeout(()=>e.style.display='none',3000);}}
 window.addEventListener('load',()=>document.getElementById('passwordInput').focus());
 </script>
 </body>
